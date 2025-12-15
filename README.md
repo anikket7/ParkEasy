@@ -36,7 +36,7 @@ Follow these instructions to set up the project locally.
 ### 1️⃣ Project Setup
 Clone the repository:
 ```bash
-git clone <repository_url>
+git clone https://github.com/anikket7/ParkEasy.git
 cd ParkingSystem
 ```
 
