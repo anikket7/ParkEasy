@@ -38,7 +38,7 @@ const Contact = () => {
             Have a question? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
           </p>
         </div>
-        
+
         <div className="grid md:grid-cols-2 gap-8">
           {/* Contact Info */}
           <div className="space-y-6">
@@ -63,7 +63,7 @@ const Contact = () => {
                     <div>
                       <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Email</h3>
                       <a href="mailto:support@parkingsystem.com" className="text-blue-600 dark:text-blue-400 hover:underline">
-                        support@parkingsystem.com
+                        support@parkeasy.in
                       </a>
                     </div>
                   </div>
@@ -75,8 +75,8 @@ const Contact = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Phone</h3>
-                      <a href="tel:+15551234567" className="text-blue-600 dark:text-blue-400 hover:underline">
-                        +1 (555) 123-4567
+                      <a href="tel:+917004545150" className="text-blue-600 dark:text-blue-400 hover:underline">
+                        +91 7004545150
                       </a>
                     </div>
                   </div>
@@ -90,7 +90,7 @@ const Contact = () => {
                     <div>
                       <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Address</h3>
                       <p className="text-gray-600 dark:text-gray-400">
-                        123 Parking Street<br />City, State 12345
+                        Lovely Professional University<br />Phagwara, Punjab 144411
                       </p>
                     </div>
                   </div>
