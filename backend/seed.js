@@ -37,51 +37,9 @@ const seedDatabase = async () => {
 
 
         // Create Parking Spots
-        console.log('🚗 Creating Parking Spots...');
-        const spots = [
-            {
-                name: 'Premium Spot A1',
-                spotNumber: 'A1',
-                location: 'Level 1, Near Entrance',
-                totalSpots: 1,
-                availableSpots: 1,
-                vehicleType: 'Car',
-                pricing: {
-                    car: { hourly: 50, daily: 500, monthly: 10000 }
-                },
-                pricePerHour: 50,
-                features: ['cctv', 'covered', 'lighting']
-            },
-            {
-                name: 'Bike Zone B1',
-                spotNumber: 'B1',
-                location: 'Level 1, Bike Zone',
-                totalSpots: 10,
-                availableSpots: 10,
-                vehicleType: 'Bike',
-                pricing: {
-                    bike: { hourly: 15, daily: 100, monthly: 2000 }
-                },
-                pricePerHour: 15,
-                features: ['cctv', 'security']
-            },
-            {
-                name: 'EV Station E1',
-                spotNumber: 'E1',
-                location: 'Level 2, EV Charging',
-                totalSpots: 2,
-                availableSpots: 2,
-                vehicleType: 'Car',
-                pricing: {
-                    car: { hourly: 80, daily: 800, monthly: 15000 }
-                },
-                pricePerHour: 80,
-                features: ['ev_charging', 'covered', 'cctv']
-            }
-        ];
-
-        await ParkingSpot.insertMany(spots);
-        console.log(`   ✅ Created ${spots.length} parking spots`);
+        // console.log('🚗 Creating Parking Spots...');
+        // Spots creation removed as per request (no default spots)
+        console.log('✨ Database seeded successfully! (Admin created, No spots added)');
 
         console.log('✨ Database seeded successfully!');
         process.exit(0);
