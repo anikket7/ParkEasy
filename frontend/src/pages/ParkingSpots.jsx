@@ -415,33 +415,17 @@ const ParkingSpots = () => {
                 />
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Total Parking Spots *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={formData.totalSpots}
-                    onChange={(e) => setFormData({ ...formData, totalSpots: e.target.value })}
-                    className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-black dark:text-white"
-                    placeholder="e.g., 50"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Vehicle Type</label>
-                  <select
-                    value={formData.vehicleType}
-                    onChange={(e) => setFormData({ ...formData, vehicleType: e.target.value })}
-                    className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-black dark:text-white"
-                  >
-                    <option value="Any">Any</option>
-                    <option value="Car">Car Only</option>
-                    <option value="Bike">Bike Only</option>
-                    <option value="Bus">Bus Only</option>
-                    <option value="Truck">Truck Only</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Total Parking Spots *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.totalSpots}
+                  onChange={(e) => setFormData({ ...formData, totalSpots: e.target.value })}
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-black dark:text-white"
+                  placeholder="e.g., 50"
+                  required
+                />
               </div>
 
               {/* Pricing Section */}
