@@ -44,6 +44,11 @@ const bookingHistorySchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    entryCode: {
+        type: String,
+        required: true,
+        length: 5
+    },
     status: {
         type: String,
         enum: ['active', 'completed', 'cancelled', 'released'],

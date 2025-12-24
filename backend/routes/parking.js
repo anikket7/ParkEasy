@@ -10,8 +10,6 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-key';
 // Booking history endpoint with ObjectId conversion
 
-
-
 // Middleware to verify token
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -171,7 +169,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
 // Book parking spot
 router.post('/:id/book', authenticateToken, [
-  body('hours').isInt({ min: 1 }).withMessage('Hours must be at least 1'),
+  body('startTime').isISO8601().toDate().withMessage('Valid start time is required'),
+  body('endTime').isISO8601().toDate().withMessage('Valid end time is required'),
   body('spotsToBook').optional().isInt({ min: 1 }).withMessage('Spots to book must be at least 1')
 ], async (req, res) => {
   try {
@@ -185,16 +184,30 @@ router.post('/:id/book', authenticateToken, [
       return res.status(404).json({ message: 'Parking spot not found' });
     }
 
-    const { hours, spotsToBook = 1, vehicleType = 'car' } = req.body;
+    const { startTime, endTime, spotsToBook = 1, vehicleType = 'car' } = req.body;
+
+    // Validate times
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const now = new Date();
+
+    if (start < now) {
+      return res.status(400).json({ message: 'Start time cannot be in the past' });
+    }
+
+    if (end <= start) {
+      return res.status(400).json({ message: 'End time must be after start time' });
+    }
+
+    // Calculate duration in hours
+    const durationMs = end - start;
+    const durationHours = durationMs / (1000 * 60 * 60);
 
     // Check if enough spots are available
     const available = spot.availableSpots ?? (spot.isAvailable ? spot.totalSpots || 1 : 0);
     if (available < spotsToBook) {
       return res.status(400).json({ message: `Only ${available} spot(s) available` });
     }
-
-    const bookedUntil = new Date();
-    bookedUntil.setHours(bookedUntil.getHours() + hours);
 
     // Determine price based on vehicle type
     let pricePerHour = spot.pricePerHour || 0;
@@ -207,27 +220,36 @@ router.post('/:id/book', authenticateToken, [
     spot.isAvailable = spot.availableSpots > 0;
     spot.bookedBy = req.user.id;
     spot.bookedSpots = spotsToBook;
-    spot.bookedAt = new Date();
-    spot.bookedUntil = bookedUntil;
+    spot.bookedAt = start;
+    spot.bookedUntil = end;
 
     await spot.save();
 
+    // Generate 5-digit random entry code
+    const entryCode = Math.floor(10000 + Math.random() * 90000).toString();
+
     // Create booking history record
-    await BookingHistory.create({
+    const bookingHistory = await BookingHistory.create({
       userId: req.user.id,
       parkingSpotId: spot._id,
       parkingSpotName: spot.name || `Spot ${spot.spotNumber}`,
       location: spot.location,
       bookedSpots: spotsToBook,
       pricePerHour: pricePerHour,
-      totalAmount: pricePerHour * spotsToBook * hours,
-      bookedAt: spot.bookedAt,
-      bookedUntil: bookedUntil,
+      totalAmount: pricePerHour * spotsToBook * durationHours,
+      bookedAt: start,
+      bookedUntil: end,
+      entryCode: entryCode,
       status: 'active'
     });
 
     const populatedSpot = await ParkingSpot.findById(spot._id).populate('bookedBy', 'name email');
-    res.json(populatedSpot);
+    res.json({
+      ...populatedSpot.toObject(),
+      totalAmount: pricePerHour * spotsToBook * durationHours,
+      entryCode: entryCode,
+      bookingId: bookingHistory._id
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -242,48 +264,69 @@ router.post('/:id/release', authenticateToken, async (req, res) => {
     }
 
     // Convert both to strings for comparison
-    const spotBookedBy = spot.bookedBy ? spot.bookedBy.toString() : null;
-    const currentUserId = req.user.id;
+    // const spotBookedBy = spot.bookedBy ? spot.bookedBy.toString() : null;
+    // const currentUserId = req.user.id;
 
-    if ((!spot.bookedBy || spotBookedBy !== currentUserId) && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'You can only release your own bookings' });
-    }
+    // Remove legacy single-tenant check. We now verify ownership via BookingHistory below.
+    // if ((!spot.bookedBy || spotBookedBy !== currentUserId) && req.user.role !== 'admin') {
+    //   return res.status(403).json({ message: 'You can only release your own bookings' });
+    // }
 
     // Get status from request body (default to 'released' if not provided)
     const status = req.body.status || 'released';
-    const validStatuses = ['cancelled', 'released'];
+    const validStatuses = ['cancelled', 'released', 'completed'];
 
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
+    // Build filter for updating booking status
+    const filter = {
+      parkingSpotId: spot._id,
+      userId: req.user.id, // Ensure we only touch bookings for this user (unless admin logic handles override)
+      status: 'active'
+    };
+
+    // If bookingId is provided, target that specific booking
+    if (req.body.bookingId) {
+      filter._id = req.body.bookingId;
+    }
+
+    // Find the bookings we are about to cancel to know how many spots to restore
+    const bookingsToCancel = await BookingHistory.find(filter);
+
+    if (!bookingsToCancel || bookingsToCancel.length === 0) {
+      // If no active booking matches (e.g. already cancelled), just return success or info
+      return res.json({ message: 'No active booking found to release' });
+    }
+
+    // Calculate total spots to restore from these specific bookings
+    const spotsToRestore = bookingsToCancel.reduce((sum, b) => sum + (b.bookedSpots || 1), 0);
+
     // Mark booking history as completed/cancelled/released
     await BookingHistory.updateMany(
-      {
-        parkingSpotId: spot._id,
-        userId: spot.bookedBy,
-        status: 'active'
-      },
+      filter,
       {
         status: status,
         releasedAt: new Date()
       }
     );
 
-    // Restore available spots
-    const spotsToRestore = spot.bookedSpots || 1;
-    spot.availableSpots = (spot.availableSpots || 0) + spotsToRestore;
+    // Update Parking Spot counts
+    spot.availableSpots = Math.min(spot.totalSpots, (spot.availableSpots || 0) + spotsToRestore);
 
-    // Ensure availableSpots doesn't exceed totalSpots
-    if (spot.availableSpots > spot.totalSpots) {
-      spot.availableSpots = spot.totalSpots;
+    if (spot.bookedSpots > 0) {
+      spot.bookedSpots = Math.max(0, spot.bookedSpots - spotsToRestore);
     }
 
     spot.isAvailable = spot.availableSpots > 0;
-    spot.bookedBy = null;
-    spot.bookedSpots = 0;
-    spot.bookedAt = null;
-    spot.bookedUntil = null;
+
+    // Only clear ownership if no spots are booked at all
+    if (spot.bookedSpots === 0) {
+      spot.bookedBy = null;
+      spot.bookedAt = null;
+      spot.bookedUntil = null;
+    }
 
     await spot.save();
     res.json(spot);
@@ -336,7 +379,7 @@ router.get('/bookings/all', authenticateToken, async (req, res) => {
     const bookings = await BookingHistory.find()
       .populate('userId', 'name email userId')
       .populate('parkingSpotId', 'spotNumber location')
-      .sort({ bookedAt: -1 });
+      .sort({ createdAt: -1 });
 
     res.json(bookings);
   } catch (error) {

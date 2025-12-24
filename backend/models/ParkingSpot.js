@@ -32,40 +32,24 @@ const parkingSpotSchema = new mongoose.Schema({
     min: 0
   },
 
-  // Pricing Information - Vehicle Type Specific
+  // Pricing Information - Hourly Only
   pricing: {
     bike: {
-      hourly: { type: Number, min: 0 },
-      daily: { type: Number, min: 0 },
-      monthly: { type: Number, min: 0 }
+      hourly: { type: Number, min: 0 }
     },
     car: {
-      hourly: { type: Number, min: 0 },
-      daily: { type: Number, min: 0 },
-      monthly: { type: Number, min: 0 }
+      hourly: { type: Number, min: 0 }
     },
     bus: {
-      hourly: { type: Number, min: 0 },
-      daily: { type: Number, min: 0 },
-      monthly: { type: Number, min: 0 }
+      hourly: { type: Number, min: 0 }
     },
     truck: {
-      hourly: { type: Number, min: 0 },
-      daily: { type: Number, min: 0 },
-      monthly: { type: Number, min: 0 }
+      hourly: { type: Number, min: 0 }
     }
   },
 
   // Legacy pricing (for backward compatibility)
   pricePerHour: {
-    type: Number,
-    min: 0
-  },
-  pricePerDay: {
-    type: Number,
-    min: 0
-  },
-  pricePerMonth: {
     type: Number,
     min: 0
   },

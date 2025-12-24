@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import { useAuth } from '../context/AuthContext';
 
 const ParkingSpots = () => {
@@ -24,7 +26,13 @@ const ParkingSpots = () => {
     features: [],
     vehicleType: 'Any'
   });
-  const [bookHours, setBookHours] = useState(1);
+
+  // Booking State
+  const [bookingStart, setBookingStart] = useState('');
+  const [bookingEnd, setBookingEnd] = useState('');
+  const [bookingCost, setBookingCost] = useState(0);
+  const [spotsToBook, setSpotsToBook] = useState(1);
+
   const [selectedVehicleType, setSelectedVehicleType] = useState('car');
 
   // Search States
@@ -57,6 +65,28 @@ const ParkingSpots = () => {
     };
   }, []);
 
+  // Calculate cost whenever times or vehicle type change
+  useEffect(() => {
+    if (bookingSpot && bookingStart && bookingEnd) {
+      const start = new Date(bookingStart);
+      const end = new Date(bookingEnd);
+
+      if (start < end) {
+        const durationMs = end - start;
+        const durationHours = durationMs / (1000 * 60 * 60);
+
+        let hourlyRate = bookingSpot.pricePerHour || 0;
+        if (bookingSpot.pricing && bookingSpot.pricing[selectedVehicleType] && bookingSpot.pricing[selectedVehicleType].hourly) {
+          hourlyRate = bookingSpot.pricing[selectedVehicleType].hourly;
+        }
+
+        setBookingCost(Math.max(0, durationHours * hourlyRate * spotsToBook));
+      } else {
+        setBookingCost(0);
+      }
+    }
+  }, [bookingStart, bookingEnd, selectedVehicleType, bookingSpot, spotsToBook]);
+
   const fetchSpots = async () => {
     try {
       setError(null);
@@ -81,34 +111,19 @@ const ParkingSpots = () => {
     try {
       const token = localStorage.getItem('token');
 
-      // Clean and prepare pricing data
+      // Clean and prepare pricing data (only hourly)
       const cleanPricing = {
-        bike: {
-          hourly: parseFloat(formData.pricing.bike.hourly) || 0,
-          daily: parseFloat(formData.pricing.bike.daily) || 0,
-          monthly: parseFloat(formData.pricing.bike.monthly) || 0
-        },
-        car: {
-          hourly: parseFloat(formData.pricing.car.hourly) || 0,
-          daily: parseFloat(formData.pricing.car.daily) || 0,
-          monthly: parseFloat(formData.pricing.car.monthly) || 0
-        },
-        bus: {
-          hourly: parseFloat(formData.pricing.bus.hourly) || 0,
-          daily: parseFloat(formData.pricing.bus.daily) || 0,
-          monthly: parseFloat(formData.pricing.bus.monthly) || 0
-        },
-        truck: {
-          hourly: parseFloat(formData.pricing.truck.hourly) || 0,
-          daily: parseFloat(formData.pricing.truck.daily) || 0,
-          monthly: parseFloat(formData.pricing.truck.monthly) || 0
-        }
+        bike: { hourly: parseFloat(formData.pricing.bike.hourly) || 0 },
+        car: { hourly: parseFloat(formData.pricing.car.hourly) || 0 },
+        bus: { hourly: parseFloat(formData.pricing.bus.hourly) || 0 },
+        truck: { hourly: parseFloat(formData.pricing.truck.hourly) || 0 }
       };
 
       // Prepare data with proper structure
+      // Prepare data with proper structure
       const spotData = {
         name: formData.name,
-        spotNumber: formData.spotNumber,
+        spotNumber: 'P-' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000), // Auto-generate unique ID
         location: formData.location,
         totalSpots: parseInt(formData.totalSpots) || 1,
         availableSpots: parseInt(formData.totalSpots) || 1,
@@ -116,8 +131,8 @@ const ParkingSpots = () => {
         features: formData.features || [],
         vehicleType: formData.vehicleType,
         pricePerHour: cleanPricing.car.hourly,
-        pricePerDay: cleanPricing.car.daily,
-        pricePerMonth: cleanPricing.car.monthly
+        pricePerDay: 0,
+        pricePerMonth: 0
       };
 
       await axios.post('http://localhost:5000/api/parking', spotData, {
@@ -135,10 +150,10 @@ const ParkingSpots = () => {
         totalSpots: '',
         availableSpots: '',
         pricing: {
-          bike: { hourly: '', daily: '', monthly: '' },
-          car: { hourly: '', daily: '', monthly: '' },
-          bus: { hourly: '', daily: '', monthly: '' },
-          truck: { hourly: '', daily: '', monthly: '' }
+          bike: { hourly: '' },
+          car: { hourly: '' },
+          bus: { hourly: '' },
+          truck: { hourly: '' }
         },
         features: [],
         vehicleType: 'Any'
@@ -152,25 +167,35 @@ const ParkingSpots = () => {
     }
   };
 
-  const handleBookSpot = async (spotId) => {
+  const handleBookSpot = async (e) => {
+    e.preventDefault();
+    if (!bookingSpot) return;
+
     try {
       const token = localStorage.getItem('token');
       const payload = {
-        hours: 1,
-        spotsToBook: bookHours,
+        startTime: bookingStart,
+        endTime: bookingEnd,
+        spotsToBook: spotsToBook,
         vehicleType: selectedVehicleType
       };
 
       const response = await axios.post(
-        `http://localhost:5000/api/parking/${spotId}/book`,
+        `http://localhost:5000/api/parking/${bookingSpot._id}/book`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setShowBookForm(null);
-      setBookHours(1);
+      setBookingSpot(null);
+      setBookingStart('');
+      setBookingEnd('');
+      setSpotsToBook(1);
       setSelectedVehicleType('car');
       fetchSpots();
-      alert('Parking spot booked successfully!');
+
+      // Show entry code in the success message
+      const entryCode = response.data.entryCode;
+      const totalCost = response.data.totalAmount ? response.data.totalAmount.toFixed(2) : bookingCost.toFixed(2);
+      alert(`✅ Parking spot booked successfully!\n\n🔑 ENTRY CODE: ${entryCode}\n💰 Total Cost: ₹${totalCost}\n\nPlease save this code to enter the parking spot.`);
     } catch (error) {
       alert(error.response?.data?.message || 'Error booking parking spot');
     }
@@ -214,10 +239,10 @@ const ParkingSpots = () => {
       name: spot.name || '',
       totalSpots: spot.totalSpots || 1,
       pricing: spot.pricing || {
-        bike: { hourly: 0, daily: 0, monthly: 0 },
-        car: { hourly: 0, daily: 0, monthly: 0 },
-        bus: { hourly: 0, daily: 0, monthly: 0 },
-        truck: { hourly: 0, daily: 0, monthly: 0 }
+        bike: { hourly: 0 },
+        car: { hourly: 0 },
+        bus: { hourly: 0 },
+        truck: { hourly: 0 }
       }
     });
   };
@@ -231,8 +256,8 @@ const ParkingSpots = () => {
         totalSpots: parseInt(editFormData.totalSpots),
         pricing: editFormData.pricing,
         pricePerHour: parseFloat(editFormData.pricing.car.hourly) || 0,
-        pricePerDay: parseFloat(editFormData.pricing.car.daily) || 0,
-        pricePerMonth: parseFloat(editFormData.pricing.car.monthly) || 0
+        pricePerDay: 0,
+        pricePerMonth: 0
       };
 
       await axios.put(
@@ -378,29 +403,16 @@ const ParkingSpots = () => {
             <h2 className="text-3xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Add New Parking Place</h2>
             <form onSubmit={handleAddSpot} className="space-y-6">
               {/* Basic Information */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Parking Place Name *</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-black dark:text-white"
-                    placeholder="e.g., Central Plaza Parking"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Spot Number/ID *</label>
-                  <input
-                    type="text"
-                    value={formData.spotNumber}
-                    onChange={(e) => setFormData({ ...formData, spotNumber: e.target.value })}
-                    className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-black dark:text-white"
-                    placeholder="e.g., A1"
-                    required
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Parking Place Name *</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-black dark:text-white"
+                  placeholder="e.g., Central Plaza Parking"
+                  required
+                />
               </div>
 
               <div>
@@ -436,6 +448,7 @@ const ParkingSpots = () => {
                     <div key={vehicleType} className="border border-gray-300 dark:border-gray-700 rounded-lg p-4">
                       <h4 className="font-semibold mb-2 capitalize">{vehicleType}</h4>
                       <div className="space-y-2">
+                        <label className="text-xs text-gray-600 dark:text-gray-400">Hourly Rate (₹)</label>
                         <input
                           type="number"
                           step="0.01"
@@ -443,25 +456,7 @@ const ParkingSpots = () => {
                           value={formData.pricing[vehicleType].hourly}
                           onChange={(e) => updatePricing(vehicleType, 'hourly', e.target.value)}
                           className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-black dark:text-white"
-                          placeholder="Hourly"
-                        />
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.pricing[vehicleType].daily}
-                          onChange={(e) => updatePricing(vehicleType, 'daily', e.target.value)}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-black dark:text-white"
-                          placeholder="Daily"
-                        />
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.pricing[vehicleType].monthly}
-                          onChange={(e) => updatePricing(vehicleType, 'monthly', e.target.value)}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-black dark:text-white"
-                          placeholder="Monthly"
+                          placeholder="Hourly Rate"
                         />
                       </div>
                     </div>
@@ -734,14 +729,6 @@ const ParkingSpots = () => {
                                   <span className="text-gray-600 dark:text-gray-400">Hourly:</span>
                                   <span className="font-semibold">₹{prices.hourly}</span>
                                 </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600 dark:text-gray-400">Daily:</span>
-                                  <span className="font-semibold">₹{prices.daily}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600 dark:text-gray-400">Monthly:</span>
-                                  <span className="font-semibold">₹{prices.monthly}</span>
-                                </div>
                               </div>
                             </div>
                           )
@@ -753,7 +740,7 @@ const ParkingSpots = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap gap-2 justify-end border-t border-gray-200 dark:border-gray-700 pt-4">
-                  {user && (viewingSpot.availableSpots ?? (viewingSpot.isAvailable ? viewingSpot.totalSpots || 1 : 0)) > 0 && (
+                  {user && !isAdmin && (viewingSpot.availableSpots ?? (viewingSpot.isAvailable ? viewingSpot.totalSpots || 1 : 0)) > 0 && (
                     <button
                       onClick={() => {
                         setBookingSpot(viewingSpot);
@@ -834,7 +821,7 @@ const ParkingSpots = () => {
                 </div>
 
                 {/* Form */}
-                <div className="space-y-4">
+                <form onSubmit={handleBookSpot} className="space-y-4">
                   {/* Vehicle Type */}
                   <div>
                     <label className="block text-sm font-medium mb-2">Select Vehicle Type</label>
@@ -850,6 +837,46 @@ const ParkingSpots = () => {
                     </select>
                   </div>
 
+                  {/* Start Time */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Start Time</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                        <span className="text-2xl group-focus-within:scale-110 transition-transform duration-300">🕐</span>
+                      </div>
+                      <DatePicker
+                        selected={bookingStart ? new Date(bookingStart) : null}
+                        onChange={(date) => setBookingStart(date)}
+                        showTimeSelect
+                        dateFormat="Pp"
+                        minDate={new Date()}
+                        placeholderText="Select Start Time"
+                        className="w-full pl-14 pr-4 py-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 text-gray-900 dark:text-white placeholder-gray-400 transition-all duration-300 cursor-pointer font-medium hover:bg-gray-100 dark:hover:bg-gray-700 w-full"
+                        wrapperClassName="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* End Time */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">End Time</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                        <span className="text-2xl group-focus-within:scale-110 transition-transform duration-300">⏰</span>
+                      </div>
+                      <DatePicker
+                        selected={bookingEnd ? new Date(bookingEnd) : null}
+                        onChange={(date) => setBookingEnd(date)}
+                        showTimeSelect
+                        dateFormat="Pp"
+                        minDate={bookingStart ? new Date(bookingStart) : new Date()}
+                        placeholderText="Select End Time"
+                        className="w-full pl-14 pr-4 py-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 text-gray-900 dark:text-white placeholder-gray-400 transition-all duration-300 cursor-pointer font-medium hover:bg-gray-100 dark:hover:bg-gray-700 w-full"
+                        wrapperClassName="w-full"
+                      />
+                    </div>
+                  </div>
+
                   {/* Number of Spots */}
                   <div>
                     <label className="block text-sm font-medium mb-2">Number of Parking Spots</label>
@@ -857,8 +884,8 @@ const ParkingSpots = () => {
                       type="number"
                       min="1"
                       max={bookingSpot.availableSpots || 1}
-                      value={bookHours}
-                      onChange={(e) => setBookHours(parseInt(e.target.value) || 1)}
+                      value={spotsToBook}
+                      onChange={(e) => setSpotsToBook(parseInt(e.target.value) || 1)}
                       className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-black dark:text-white"
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -869,35 +896,36 @@ const ParkingSpots = () => {
                   {/* Price Summary */}
                   <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 rounded-xl">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-700 dark:text-gray-300">Total Amount (per hour):</span>
+                      <span className="text-gray-700 dark:text-gray-300">Estimated Total:</span>
                       <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        ₹{(bookingSpot.pricing?.[selectedVehicleType]?.hourly || bookingSpot.pricePerHour || 0) * bookHours}
+                        ₹{bookingCost.toFixed(2)}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      {bookHours} spot{bookHours !== 1 ? 's' : ''} × ₹{bookingSpot.pricing?.[selectedVehicleType]?.hourly || bookingSpot.pricePerHour || 0}/hr
-                    </p>
+                    {bookingStart && bookingEnd && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {(Math.max(0, (new Date(bookingEnd) - new Date(bookingStart)) / (1000 * 60 * 60))).toFixed(1)} hrs × {spotsToBook} spot(s) × ₹{bookingSpot.pricing?.[selectedVehicleType]?.hourly || bookingSpot.pricePerHour || 0}/hr
+                      </p>
+                    )}
                   </div>
 
                   {/* Action Buttons */}
                   <div className="flex gap-3">
                     <button
+                      type="button"
                       onClick={() => setBookingSpot(null)}
                       className="flex-1 px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-semibold transition"
                     >
                       Cancel
                     </button>
                     <button
-                      onClick={() => {
-                        handleBookSpot(bookingSpot._id);
-                        setBookingSpot(null);
-                      }}
-                      className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition"
+                      type="submit"
+                      disabled={!bookingStart || !bookingEnd || bookingCost <= 0}
+                      className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Confirm Booking
                     </button>
                   </div>
-                </div>
+                </form>
               </div>
             </div>
           </div>
@@ -962,28 +990,6 @@ const ParkingSpots = () => {
                                 min="0"
                                 value={editFormData.pricing[vehicleType].hourly}
                                 onChange={(e) => updateEditPricing(vehicleType, 'hourly', e.target.value)}
-                                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-black dark:text-white"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-600 dark:text-gray-400">Daily</label>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={editFormData.pricing[vehicleType].daily}
-                                onChange={(e) => updateEditPricing(vehicleType, 'daily', e.target.value)}
-                                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-black dark:text-white"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-600 dark:text-gray-400">Monthly</label>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={editFormData.pricing[vehicleType].monthly}
-                                onChange={(e) => updateEditPricing(vehicleType, 'monthly', e.target.value)}
                                 className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-black dark:text-white"
                               />
                             </div>

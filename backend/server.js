@@ -4,7 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
-import session from 'express-session';
+// import session from 'express-session';
 
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/user.js';
@@ -23,20 +23,20 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
-}));
+// app.use(session({
+//   secret: process.env.SESSION_SECRET || 'your-secret-key',
+//   resave: false,
+//   saveUninitialized: false,
+//   cookie: { secure: false, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+// }));
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/parkeasy', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
+mongoose.connect(
+  process.env.MONGODB_URI || 'mongodb://localhost:27017/parkeasy'
+)
+.then(() => console.log('MongoDB Connected'))
+.catch(err => console.error(err));
+
 
 // Routes
 app.use('/api/auth', authRoutes);

@@ -48,32 +48,81 @@ const Profile = () => {
 
   // Separate active and completed bookings from history
   // Use history records for active bookings too, as they contain the correct snapshot data (price, vehicle type, etc)
-  const activeBookings = bookingHistory.filter(h => h.status === 'active');
-  const completedBookings = bookingHistory.filter(h =>
-    h.status === 'completed' || h.status === 'cancelled' || h.status === 'released'
-  );
+  /*
+   * Filter and Sort Bookings
+   * - Active: Currently ongoing
+   * - Completed: Finished, Cancelled, or Released (legacy)
+   * - Sorted by most recent booking time (Created At)
+   */
+  const activeBookings = bookingHistory
+    .filter(h => h.status === 'active')
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  const handleBookingAction = async (spotId, action) => {
-    const confirmMessage = action === 'cancelled'
-      ? 'Are you sure you want to cancel this booking?'
-      : 'Are you sure you want to release this parking spot?';
+  const completedBookings = bookingHistory
+    .filter(h => h.status === 'completed' || h.status === 'cancelled' || h.status === 'released')
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    if (!window.confirm(confirmMessage)) return;
+  /*
+   * Handle booking actions (complete/cancel)
+   */
+  const handleBookingAction = async (spotId, action, bookingId) => {
+    // Only ask for confirmation when cancelling
+    if (action === 'cancelled') {
+      const confirmMessage = 'Are you sure you want to cancel this booking?';
+      if (!window.confirm(confirmMessage)) return;
+    }
 
     try {
       const token = localStorage.getItem('token');
       await axios.post(
         `http://localhost:5000/api/parking/${spotId}/release`,
-        { status: action },
+        {
+          status: action,
+          bookingId: bookingId
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       fetchBookings();
       fetchBookingHistory();
-      alert('Booking cancelled successfully!');
+      alert(`Booking ${action === 'cancelled' ? 'cancelled' : 'completed'} successfully!`);
     } catch (error) {
-      alert(error.response?.data?.message || 'Error cancelling booking');
+      alert(error.response?.data?.message || 'Error updating booking');
     }
   };
+
+  // ... inside formatting ...
+
+  {/* Right Section - Action Buttons */ }
+  <div className="flex lg:flex-col gap-2">
+    <button
+      onClick={() => {
+        const spotId = booking.parkingSpotId?._id || booking.parkingSpotId;
+        if (!spotId) {
+          console.error('Missing spot ID for booking:', booking);
+          alert('Error: Cannot identify parking spot. Please contact support.');
+          return;
+        }
+        handleBookingAction(spotId, 'completed');
+      }}
+      className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg text-sm"
+    >
+      Complete Booking
+    </button>
+    <button
+      onClick={() => {
+        const spotId = booking.parkingSpotId?._id || booking.parkingSpotId;
+        if (!spotId) {
+          console.error('Missing spot ID for booking:', booking);
+          alert('Error: Cannot identify parking spot. Please contact support.');
+          return;
+        }
+        handleBookingAction(spotId, 'cancelled');
+      }}
+      className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg text-sm"
+    >
+      Cancel Booking
+    </button>
+  </div>
 
   if (loading) {
     return (
@@ -127,9 +176,8 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Total Bookings */}
+          {/* Active Bookings */}
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-2xl shadow-xl text-white">
             <div className="flex items-center justify-between">
               <div>
@@ -158,12 +206,12 @@ const Profile = () => {
           </div>
 
           {/* Total Spending */}
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-2xl shadow-xl text-white">
+          <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 rounded-2xl shadow-xl text-white">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-purple-100 text-sm font-medium mb-1">Active Spending</p>
+                <p className="text-indigo-100 text-sm font-medium mb-1">Total Spending</p>
                 <p className="text-4xl font-bold">
-                  ₹{activeBookings.reduce((sum, spot) => sum + ((spot.pricePerHour || 0) * (spot.bookedSpots || 1)), 0)}
+                  ₹{completedBookings.reduce((sum, spot) => spot.status !== 'cancelled' ? sum + (spot.totalAmount || 0) : sum, 0).toFixed(0)}
                 </p>
               </div>
               <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-3xl">
@@ -217,7 +265,7 @@ const Profile = () => {
                     {/* Left Section - Booking Details */}
                     <div className="flex-1">
                       {/* Header with badges */}
-                      <div className="flex flex-wrap items-center gap-2 mb-4">
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
                         <h3 className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                           {booking.parkingSpotName}
                         </h3>
@@ -225,6 +273,24 @@ const Profile = () => {
                           ACTIVE
                         </span>
                       </div>
+
+                      {/* Entry Code - Top Display */}
+                      {booking.entryCode && (
+                        <div className="mb-4">
+                          <div className="inline-flex items-center gap-3 px-4 py-2 bg-gradient-to-br from-purple-100 via-purple-50 to-indigo-100 dark:from-purple-900/20 dark:via-purple-800/10 dark:to-indigo-900/20 border-2 border-purple-300/50 dark:border-purple-600/50 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 bg-gradient-to-br from-purple-600 to-indigo-600 dark:from-purple-500 dark:to-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md">
+                                <span className="text-white text-sm">🔑</span>
+                              </div>
+                              <span className="text-xs font-bold text-purple-800 dark:text-purple-200 uppercase tracking-wider">Entry Code</span>
+                            </div>
+                            <div className="h-6 w-px bg-purple-300 dark:bg-purple-600"></div>
+                            <span className="text-xl font-mono font-extrabold text-purple-900 dark:text-purple-100 tracking-[0.35em] bg-white dark:bg-gray-900 px-4 py-1.5 rounded-lg shadow-inner">
+                              {booking.entryCode}
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Details Grid */}
                       <div className="grid md:grid-cols-2 gap-3">
@@ -246,21 +312,40 @@ const Profile = () => {
                           </div>
                         </div>
 
+                        {/* Booked On (Creation Time) */}
+                        <div className="flex items-start gap-2">
+                          <span className="text-gray-500 text-lg mt-0.5">�</span>
+                          <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Booked On</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                              {new Date(booking.createdAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+
                         {/* Total Price */}
                         <div className="flex items-start gap-2">
                           <span className="text-green-500 text-lg mt-0.5">💰</span>
                           <div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Price</p>
-                            <p className="text-lg font-bold text-green-600 dark:text-green-400">₹{booking.totalAmount}</p>
+                            <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                              ₹{typeof booking.totalAmount === 'number' ? booking.totalAmount.toFixed(2) : booking.totalAmount}
+                            </p>
                           </div>
                         </div>
 
-                        {/* Booked Time */}
+                        {/* Valid From */}
                         {booking.bookedAt && (
                           <div className="flex items-start gap-2">
                             <span className="text-orange-500 text-lg mt-0.5">🕐</span>
                             <div>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Booked On</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Valid From</p>
                               <p className="text-sm font-semibold text-gray-900 dark:text-white">
                                 {new Date(booking.bookedAt).toLocaleDateString('en-IN', {
                                   day: 'numeric',
@@ -276,7 +361,7 @@ const Profile = () => {
 
                         {/* Valid Until */}
                         {booking.bookedUntil && (
-                          <div className="flex items-start gap-2 md:col-span-2">
+                          <div className="flex items-start gap-2">
                             <span className="text-red-500 text-lg mt-0.5">⏰</span>
                             <div>
                               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Valid Until</p>
@@ -305,11 +390,11 @@ const Profile = () => {
                             alert('Error: Cannot identify parking spot. Please contact support.');
                             return;
                           }
-                          handleBookingAction(spotId, 'released');
+                          handleBookingAction(spotId, 'completed', booking._id);
                         }}
-                        className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg text-sm"
+                        className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg text-sm"
                       >
-                        Release Spot
+                        Complete Booking
                       </button>
                       <button
                         onClick={() => {
@@ -319,7 +404,7 @@ const Profile = () => {
                             alert('Error: Cannot identify parking spot. Please contact support.');
                             return;
                           }
-                          handleBookingAction(spotId, 'cancelled');
+                          handleBookingAction(spotId, 'cancelled', booking._id);
                         }}
                         className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg text-sm"
                       >
@@ -366,46 +451,97 @@ const Profile = () => {
               {completedBookings.map((booking) => (
                 <div
                   key={booking._id}
-                  className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/50 dark:to-gray-800/50 p-5 rounded-xl border border-gray-300 dark:border-gray-700 opacity-75"
+                  className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-300"
                 >
-                  <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300">
+                  <div className="flex flex-col md:flex-row md:justify-between gap-4">
+                    {/* Left Section: Details */}
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">
                           {booking.parkingSpotName}
                         </h3>
-                        <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${booking.status === 'cancelled'
-                          ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                          : booking.status === 'released'
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                          }`}>
-                          {booking.status === 'cancelled' ? '❌ Cancelled' : booking.status === 'released' ? '🔵 Released' : '✅ Completed'}
+                        {booking.status === 'cancelled' && (
+                          <span className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-xs font-bold">
+                            Cancelled
+                          </span>
+                        )}
+                        {(booking.status === 'released' || booking.status === 'completed') && (
+                          <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-xs font-bold">
+                            Completed
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
+                        <span>📍</span>
+                        <span className="text-sm font-medium">{booking.location}</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-3">
+                        {/* Booked On */}
+                        <div>
+                          <p className="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-1">Booked On</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                            {new Date(booking.createdAt).toLocaleString('en-IN', {
+                              day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true
+                            })}
+                          </p>
+                        </div>
+
+                        {/* Valid From */}
+                        <div>
+                          <p className="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-1">Valid From</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                            {new Date(booking.bookedAt).toLocaleString('en-IN', {
+                              day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true
+                            })}
+                          </p>
+                        </div>
+
+                        {/* Valid Until */}
+                        <div>
+                          <p className="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-1">Valid Until</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                            {new Date(booking.bookedUntil).toLocaleString('en-IN', {
+                              day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true
+                            })}
+                          </p>
+                        </div>
+
+                        {/* Duration */}
+                        <div>
+                          <p className="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-1">Total Duration</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                            {((new Date(booking.bookedUntil) - new Date(booking.bookedAt)) / (1000 * 60 * 60)).toFixed(1)} Hours
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Section: Price & Stats */}
+                    <div className="flex flex-row md:flex-col justify-between md:justify-center md:items-end gap-2 border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+                      <div className="text-right">
+                        <p className="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-1">Total Paid</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                          ₹{typeof booking.totalAmount === 'number' ? booking.totalAmount.toFixed(2) : booking.totalAmount}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400">
+                          <span>🅿️</span> {booking.bookedSpots} Spot{booking.bookedSpots > 1 ? 's' : ''}
                         </span>
                       </div>
-                      <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">📍 {booking.location}</p>
-                      <p className="text-gray-600 dark:text-gray-400 text-sm">
-                        🕐 {new Date(booking.bookedAt).toLocaleString()} - {new Date(booking.bookedUntil).toLocaleString()}
-                      </p>
-                      {booking.releasedAt && (
-                        <p className="text-gray-500 dark:text-gray-500 text-xs mt-1">
-                          Released: {new Date(booking.releasedAt).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900 dark:text-white">₹{booking.totalAmount}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{booking.bookedSpots} spot(s)</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-500">₹{booking.pricePerHour}/hr</p>
                     </div>
                   </div>
                 </div>
+
               ))}
             </div>
-          )}
-        </div>
-      </div>
-    </div>
+          )
+          }
+        </div >
+      </div >
+    </div >
   );
 };
 

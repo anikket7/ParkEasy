@@ -9,10 +9,12 @@ A modern, full-stack web application designed to simplify parking management. Fi
 ## ✨ Features
 
 - **🔍 Search & Book**: Find parking spots by location and book them instantly.
-- **👑 Admin Dashboard**: Manage spots, view revenue, and oversee all bookings.
-- **📱 Responsive**: Works on all devices.
-- **🌗 Dark Mode**: Built-in dark mode support.
-- **🔐 Secure Auth**: JWT-based authentication.
+- **� Entry Code System**: Automatic 5-digit entry code generation for each booking for secure parking access.
+- **👁️ Password Visibility Toggle**: Show/hide password on login and signup pages for better user experience.
+- **�👑 Admin Dashboard**: Manage spots, view revenue, oversee all bookings, and view entry codes for active bookings.
+- **📱 Mobile Responsive**: Fully optimized for mobile with hamburger menu navigation.
+- **🌗 Dark Mode**: Built-in dark mode support across all pages.
+- **🔐 Secure Auth**: JWT-based authentication with bcrypt password hashing.
 
 ---
 
