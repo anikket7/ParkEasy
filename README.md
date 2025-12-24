@@ -2,7 +2,7 @@
 
 A modern, full-stack web application designed to simplify parking management. Find, book, and manage parking spots with ease.
 
-![ParkEasy Preview](https://via.placeholder.com/1200x600?text=ParkEasy+Preview)
+
 
 ---
 
